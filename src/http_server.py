@@ -1,13 +1,19 @@
+import os
 from threading import Thread
 
 import kombu.exceptions
 from flask import Blueprint, Flask, current_app, request
+from flask_httpauth import HTTPTokenAuth
 from loguru import logger
 from prometheus_client.exposition import choose_encoder
 from waitress import serve
 
 blueprint = Blueprint("celery_exporter", __name__)
+auth = HTTPTokenAuth()
 
+@auth.verify_token
+def verify_user_token(token):
+    return True if token == os.environ.get('BEARER_TOKEN') else False
 
 @blueprint.route("/")
 def index():
@@ -28,6 +34,7 @@ def index():
 
 
 @blueprint.route("/metrics")
+@auth.login_required
 def metrics():
     current_app.config["metrics_puller"]()
     encoder, content_type = choose_encoder(request.headers.get("accept"))
@@ -36,6 +43,7 @@ def metrics():
 
 
 @blueprint.route("/health")
+@auth.login_required
 def health():
     conn = current_app.config["celery_connection"]
     uri = conn.as_uri()
